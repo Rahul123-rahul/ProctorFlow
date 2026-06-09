@@ -5,9 +5,10 @@ import { Alert, Modal, Pressable, Share, StyleSheet, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { ClientLogo } from '@/components/ClientLogo';
-import { MultiSelect } from '@/components/MultiSelect';
+import { LiveBadge } from '@/components/LiveBadge';
+import { ProctorPickerModal, type PickerOption } from '@/components/ProctorPickerModal';
 import { Screen } from '@/components/Screen';
-import { EVENT_STATUS_LABEL, EventStatusPill } from '@/components/StatusPill';
+import { EVENT_STATUS_LABEL, EventStatePill } from '@/components/StatusPill';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Spacing } from '@/constants/theme';
 import {
@@ -21,13 +22,23 @@ import {
 import { listActiveProctors } from '@/db/proctors';
 import type { EventDetail, EventProctorView, EventStatus } from '@/db/types';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useNowTick } from '@/hooks/use-now-tick';
 import { useTheme } from '@/hooks/use-theme';
-import { eventDisplayName, formatDate, formatTime12 } from '@/utils/format';
+import {
+  eventDisplayName,
+  formatEventDate,
+  formatShareDate,
+  formatTime12,
+  isOngoing,
+} from '@/utils/format';
 
 /** Builds the WhatsApp-ready proctor list (bold via *asterisks*). */
 function buildProctorListMessage(event: EventDetail): string {
-  // The display name already includes the date for auto-named events.
-  const header = `*${eventDisplayName(event.event_name, event.event_date, event.client_name)}*`;
+  // Keep the WhatsApp header in the "<date> <client> Proctor List" form.
+  const heading =
+    event.event_name?.trim() ||
+    `${formatShareDate(event.event_date)} ${event.client_name} Proctor List`;
+  const header = `*${heading}*`;
   const blocks = event.proctors.map(
     (p) =>
       `*Name:* ${p.proctor_name}\n*Phone Number:* ${p.phone}\n*Email ID:* ${p.email ?? '-'}`
@@ -45,6 +56,7 @@ const STATUSES: EventStatus[] = ['scheduled', 'completed', 'no_show', 'cancelled
 export default function EventDetailScreen() {
   const router = useRouter();
   const theme = useTheme();
+  useNowTick();
   const params = useLocalSearchParams<{ id: string }>();
   const id = Number(params.id);
 
@@ -53,12 +65,10 @@ export default function EventDetailScreen() {
   const [statusOpen, setStatusOpen] = useState(false);
   const [actionFor, setActionFor] = useState<EventProctorView | null>(null);
   const [replaceFor, setReplaceFor] = useState<EventProctorView | null>(null);
-  const [replaceOptions, setReplaceOptions] = useState<{ id: number; label: string; sublabel?: string }[]>([]);
+  const [replaceOptions, setReplaceOptions] = useState<PickerOption[]>([]);
 
   const [addOpen, setAddOpen] = useState(false);
-  const [addOptions, setAddOptions] = useState<{ id: number; label: string; sublabel?: string }[]>([]);
-  const [addSelected, setAddSelected] = useState<number[]>([]);
-  const [addSearch, setAddSearch] = useState('');
+  const [addOptions, setAddOptions] = useState<PickerOption[]>([]);
 
   const reload = useCallback(() => {
     let active = true;
@@ -78,10 +88,8 @@ export default function EventDetailScreen() {
     reload();
   }
 
-  // ---- Add proctors ----
+  // ---- Add proctors ---- (active proctors not already on the event)
   function openAdd() {
-    setAddSelected([]);
-    setAddSearch('');
     listActiveProctors().then((rows) => {
       setAddOptions(
         rows
@@ -91,8 +99,8 @@ export default function EventDetailScreen() {
       setAddOpen(true);
     });
   }
-  async function confirmAdd() {
-    if (addSelected.length > 0) await addProctorsToEvent(id, addSelected);
+  async function confirmAdd(ids: number[]) {
+    if (ids.length > 0) await addProctorsToEvent(id, ids);
     setAddOpen(false);
     reload();
   }
@@ -178,10 +186,16 @@ export default function EventDetailScreen() {
           <ThemedText type="subtitle" style={styles.client}>
             {eventDisplayName(event.event_name, event.event_date, event.client_name)}
           </ThemedText>
-          <EventStatusPill status={event.status} />
+          <View style={styles.headerBadges}>
+            {isOngoing(event.event_date, event.login_time, event.logout_time) ? <LiveBadge /> : null}
+            <EventStatePill
+              status={event.status}
+              ongoing={isOngoing(event.event_date, event.login_time, event.logout_time)}
+            />
+          </View>
         </View>
         <InfoRow label="Client" value={event.client_name} />
-        <InfoRow label="Date" value={formatDate(event.event_date)} />
+        <InfoRow label="Date" value={formatEventDate(event.event_date)} />
         <InfoRow label="Login time" value={formatTime12(event.login_time) || null} />
         <InfoRow label="Logout time" value={formatTime12(event.logout_time) || null} />
         <InfoRow
@@ -258,55 +272,29 @@ export default function EventDetailScreen() {
         ) : null}
       </BottomSheet>
 
-      {/* Replace picker */}
-      <BottomSheet visible={replaceFor !== null} onClose={() => setReplaceFor(null)}>
-        <ThemedText type="subtitle" style={styles.sheetTitle}>
-          Replace {replaceFor?.proctor_name}
-        </ThemedText>
-        <ThemedText themeColor="textSecondary" style={styles.sheetSub}>
-          Pick the proctor who went instead
-        </ThemedText>
-        {replaceOptions.length === 0 ? (
-          <ThemedText themeColor="textSecondary" style={styles.empty}>
-            No other active proctors available.
-          </ThemedText>
-        ) : (
-          replaceOptions.map((o) => (
-            <SheetAction key={o.id} label={o.label} sublabel={o.sublabel} onPress={() => doReplace(o.id)} />
-          ))
-        )}
-      </BottomSheet>
+      {/* Replace picker (scrollable, single-select) */}
+      <ProctorPickerModal
+        mode="single"
+        visible={replaceFor !== null}
+        onClose={() => setReplaceFor(null)}
+        title={replaceFor ? `Replace ${replaceFor.proctor_name}` : 'Replace'}
+        subtitle="Pick the proctor who went instead"
+        options={replaceOptions}
+        emptyText="No other active proctors available."
+        onPick={doReplace}
+      />
 
-      {/* Add proctors */}
-      <Modal visible={addOpen} transparent animationType="slide" onRequestClose={() => setAddOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setAddOpen(false)}>
-          <Pressable
-            style={[styles.sheet, { backgroundColor: theme.background, borderColor: theme.border }]}
-            onPress={(e) => e.stopPropagation()}>
-            <ThemedText type="subtitle" style={styles.sheetTitle}>
-              Add proctors
-            </ThemedText>
-            <MultiSelect
-              label="Active proctors"
-              options={addOptions}
-              selected={addSelected}
-              onToggle={(pid) =>
-                setAddSelected((prev) => (prev.includes(pid) ? prev.filter((x) => x !== pid) : [...prev, pid]))
-              }
-              search={addSearch}
-              onSearch={setAddSearch}
-              emptyText="No more active proctors to add"
-            />
-            <View style={styles.addActions}>
-              <Button
-                title={addSelected.length > 0 ? `Add ${addSelected.length}` : 'Add'}
-                onPress={confirmAdd}
-              />
-              <Button title="Cancel" variant="secondary" onPress={() => setAddOpen(false)} />
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      {/* Add proctors (scrollable, multi-select) */}
+      <ProctorPickerModal
+        mode="multi"
+        visible={addOpen}
+        onClose={() => setAddOpen(false)}
+        title="Add proctors"
+        subtitle="Select one or more active proctors"
+        options={addOptions}
+        emptyText="No more active proctors to add"
+        onConfirm={confirmAdd}
+      />
     </Screen>
   );
 }
@@ -392,6 +380,7 @@ function SheetAction({
 const styles = StyleSheet.create({
   headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.two },
   client: { fontSize: 22, flex: 1 },
+  headerBadges: { alignItems: 'flex-end', gap: Spacing.one },
   infoRow: { flexDirection: 'row', marginTop: Spacing.two, gap: Spacing.two },
   infoLabel: { width: 90 },
   infoValue: { flex: 1 },

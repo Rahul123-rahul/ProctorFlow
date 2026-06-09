@@ -77,6 +77,7 @@ function RootNavigator() {
     <Stack screenOptions={{ headerBackButtonDisplayMode: 'minimal' }}>
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="index" options={{ title: 'ProConnectify' }} />
+      <Stack.Screen name="schedule" options={{ title: 'Schedule' }} />
       <Stack.Screen name="proctors/index" options={{ title: 'Proctors' }} />
       <Stack.Screen name="proctors/form" options={{ title: 'Proctor' }} />
       <Stack.Screen name="proctors/[id]" options={{ title: 'Proctor' }} />

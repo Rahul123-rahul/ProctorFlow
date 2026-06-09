@@ -6,7 +6,7 @@ import { Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { EventPaymentStatus, EventStatus, PaymentStatus } from '@/db/types';
 
-type Tone = 'neutral' | 'tint' | 'success' | 'warning' | 'danger';
+type Tone = 'neutral' | 'tint' | 'success' | 'warning' | 'danger' | 'ongoing';
 
 const EVENT_TONE: Record<EventStatus, Tone> = {
   scheduled: 'tint',
@@ -53,6 +53,8 @@ export function StatusPill({ label, tone }: { label: string; tone: Tone }) {
     success: { bg: c.successMuted, fg: c.success },
     warning: { bg: c.warningMuted, fg: c.warning },
     danger: { bg: c.dangerMuted, fg: c.danger },
+    // Ongoing = orange/amber, distinct from green (completed) and grey (scheduled).
+    ongoing: { bg: 'rgba(249,115,22,0.16)', fg: '#F97316' },
   };
   const { bg, fg } = map[tone];
 
@@ -67,6 +69,15 @@ export function StatusPill({ label, tone }: { label: string; tone: Tone }) {
 
 export function EventStatusPill({ status }: { status: EventStatus }) {
   return <StatusPill label={EVENT_STATUS_LABEL[status]} tone={EVENT_TONE[status]} />;
+}
+
+/**
+ * The status pill to display for an event: an orange "Ongoing" pill while the
+ * event is live (today + within login–logout), otherwise its stored status.
+ */
+export function EventStatePill({ status, ongoing }: { status: EventStatus; ongoing: boolean }) {
+  if (ongoing) return <StatusPill label="Ongoing" tone="ongoing" />;
+  return <EventStatusPill status={status} />;
 }
 
 export function PaymentStatusPill({ status }: { status: PaymentStatus }) {

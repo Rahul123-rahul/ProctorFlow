@@ -5,20 +5,23 @@ import { Pressable, SectionList, StyleSheet, View } from 'react-native';
 import { Card } from '@/components/Card';
 import { ClientLogo } from '@/components/ClientLogo';
 import { EmptyState } from '@/components/EmptyState';
+import { LiveBadge } from '@/components/LiveBadge';
 import { Select, type SelectOption } from '@/components/Select';
-import { EventStatusPill } from '@/components/StatusPill';
+import { EventStatePill } from '@/components/StatusPill';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, MaxContentWidth, Spacing } from '@/constants/theme';
 import { listClients } from '@/db/clients';
 import { listEvents, type EventFilter } from '@/db/events';
 import type { EventListItem } from '@/db/types';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useNowTick } from '@/hooks/use-now-tick';
 import { useTheme } from '@/hooks/use-theme';
-import { eventDisplayName, formatDate, formatTime12 } from '@/utils/format';
+import { eventDisplayName, formatEventDate, formatTime12, isOngoing } from '@/utils/format';
 
 export default function EventLogScreen() {
   const router = useRouter();
   const theme = useTheme();
+  useNowTick(); // re-evaluate the ongoing/LIVE window over time
 
   const [events, setEvents] = useState<EventListItem[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -90,7 +93,7 @@ export default function EventLogScreen() {
         stickySectionHeadersEnabled={false}
         renderSectionHeader={({ section }) => (
           <ThemedText type="smallBold" themeColor="textSecondary" style={styles.sectionHeader}>
-            {formatDate(section.title).toUpperCase()} · {section.data.length}
+            {formatEventDate(section.title)} · {section.data.length}
           </ThemedText>
         )}
         renderItem={({ item }) => (
@@ -113,7 +116,13 @@ export default function EventLogScreen() {
                   </ThemedText>
                 ) : null}
               </View>
-              <EventStatusPill status={item.status} />
+              <View style={styles.rowRight}>
+                {isOngoing(item.event_date, item.login_time, item.logout_time) ? <LiveBadge /> : null}
+                <EventStatePill
+                  status={item.status}
+                  ongoing={isOngoing(item.event_date, item.login_time, item.logout_time)}
+                />
+              </View>
             </View>
           </Card>
         )}
@@ -165,5 +174,6 @@ const styles = StyleSheet.create({
   sectionHeader: { marginTop: Spacing.two, marginBottom: Spacing.half },
   row: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: Spacing.two },
   rowText: { flex: 1, gap: 2 },
+  rowRight: { alignItems: 'flex-end', gap: Spacing.one },
   clientName: { fontSize: 17, fontWeight: '600' },
 });

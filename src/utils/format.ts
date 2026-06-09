@@ -21,6 +21,36 @@ export function currentPeriod(): string {
   return todayISO().slice(0, 7);
 }
 
+/** True if the ISO date is today (local). */
+export function isToday(iso: string | null | undefined): boolean {
+  return !!iso && iso.slice(0, 10) === todayISO();
+}
+
+/** Current local time as 24-hour "HH:mm". */
+export function nowHHmm(): string {
+  const d = new Date();
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+/**
+ * "Ongoing" = the event is today AND the current time is within its login–logout
+ * window. Times are stored 24-hour "HH:mm" (zero-padded, so string compare works).
+ * Missing login → no lower bound; missing logout → no upper bound.
+ */
+export function isOngoing(
+  eventDate: string | null | undefined,
+  loginTime: string | null | undefined,
+  logoutTime: string | null | undefined
+): boolean {
+  if (!isToday(eventDate)) return false;
+  const now = nowHHmm();
+  const login = loginTime?.trim();
+  const logout = logoutTime?.trim();
+  if (login && now < login) return false; // before start
+  if (logout && now > logout) return false; // after end
+  return true;
+}
+
 /** "2026-06-07" -> "07 Jun 2026". Returns the input unchanged if it can't parse. */
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '';
@@ -94,10 +124,22 @@ export function formatTime12(stored: string | null | undefined): string {
   return s;
 }
 
-/** Auto event name, e.g. "24th June Samsung Proctor List". */
+/** Compact event date, e.g. "9th Jun TUE" (ordinal day · Title month · UPPER weekday). */
+export function formatEventDate(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  const year = +m[1];
+  const monthIdx = +m[2] - 1;
+  const day = +m[3];
+  if (monthIdx < 0 || monthIdx > 11) return iso;
+  const wd = new Date(year, monthIdx, day).getDay();
+  return `${ordinal(day)} ${MONTHS[monthIdx]} ${(WEEKDAYS[wd] ?? '').toUpperCase()}`;
+}
+
+/** Auto event name, e.g. "9th Jun TUE Samsung". */
 export function defaultEventName(eventDate: string, clientName: string): string {
-  const date = formatShareDate(eventDate);
-  return [date, clientName, 'Proctor List'].filter(Boolean).join(' ');
+  return [formatEventDate(eventDate), clientName].filter(Boolean).join(' ');
 }
 
 /** The name to show for an event: the custom name if set, else the auto default. */

@@ -7,14 +7,27 @@ import { useAuth } from '@/auth/AuthProvider';
 import { BrandFooter } from '@/components/BrandFooter';
 import { BrandLogo } from '@/components/BrandLogo';
 import { Card } from '@/components/Card';
+import { LiveBadge } from '@/components/LiveBadge';
 import { Screen } from '@/components/Screen';
+import { EventStatePill } from '@/components/StatusPill';
 import { ThemedText } from '@/components/themed-text';
 import { Brand } from '@/constants/brand';
 import { Colors, Spacing } from '@/constants/theme';
 import { getDashboardStats, type DashboardStats } from '@/db/dashboard';
+import { listEventsFromDate } from '@/db/events';
+import type { EventListItem } from '@/db/types';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useNowTick } from '@/hooks/use-now-tick';
 import { useTheme } from '@/hooks/use-theme';
-import { currentPeriod, formatDate, formatMonth, todayISO } from '@/utils/format';
+import {
+  currentPeriod,
+  formatDate,
+  formatEventDate,
+  formatMonth,
+  formatTime12,
+  isOngoing,
+  todayISO,
+} from '@/utils/format';
 
 const MODULES = [
   { href: '/proctors', title: 'Proctors', subtitle: 'Directory & history', icon: 'people' },
@@ -28,8 +41,16 @@ export default function DashboardScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { signOut } = useAuth();
+  useNowTick(); // re-evaluate the ongoing/LIVE window over time
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [schedule, setSchedule] = useState<EventListItem[]>([]);
   const period = currentPeriod();
+  const today = todayISO();
+
+  const todayEvents = schedule.filter((e) => e.event_date === today);
+  const upcoming = schedule.filter((e) => e.event_date > today);
+  const nextEvent = upcoming[0] ?? null;
+  const liveNow = todayEvents.some((e) => isOngoing(e.event_date, e.login_time, e.logout_time));
 
   function confirmLogout() {
     Alert.alert('Log out?', 'You will need to sign in again to use the app.', [
@@ -41,7 +62,13 @@ export default function DashboardScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      getDashboardStats(todayISO(), period).then((s) => active && setStats(s));
+      Promise.all([getDashboardStats(todayISO(), period), listEventsFromDate(todayISO())]).then(
+        ([s, ev]) => {
+          if (!active) return;
+          setStats(s);
+          setSchedule(ev);
+        }
+      );
       return () => {
         active = false;
       };
@@ -64,14 +91,48 @@ export default function DashboardScreen() {
         </View>
       </Card>
 
-      <Card>
-        <ThemedText type="smallBold" themeColor="textSecondary">
-          TODAY · {formatDate(todayISO())}
-        </ThemedText>
-        <View style={styles.todayRow}>
-          <ThemedText style={styles.bigNumber}>{stats?.todayCount ?? '—'}</ThemedText>
-          <ThemedText themeColor="textSecondary" style={styles.todayLabel}>
-            {stats?.todayCount === 1 ? 'event' : 'events'} today
+      <Card onPress={() => router.push('/schedule')}>
+        <View style={styles.todayHead}>
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            TODAY · {formatDate(today)}
+          </ThemedText>
+          <ThemedText type="smallBold" style={{ color: theme.tint }}>
+            View schedule ›
+          </ThemedText>
+        </View>
+
+        {todayEvents.length === 0 ? (
+          <ThemedText themeColor="textSecondary" style={styles.todayEmpty}>
+            No events today
+          </ThemedText>
+        ) : (
+          todayEvents.map((e) => {
+            const ongoing = isOngoing(e.event_date, e.login_time, e.logout_time);
+            return (
+              <View key={e.id} style={styles.todayEventRow}>
+                <View style={styles.todayEventText}>
+                  <ThemedText style={styles.todayEventName}>{e.client_name}</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {e.login_time ? `${formatTime12(e.login_time)} · ` : ''}
+                    {e.proctor_count} proctor{e.proctor_count === 1 ? '' : 's'}
+                  </ThemedText>
+                </View>
+                {ongoing ? <LiveBadge /> : <EventStatePill status={e.status} ongoing={false} />}
+              </View>
+            );
+          })
+        )}
+
+        <View style={[styles.nextLine, { borderTopColor: theme.border }]}>
+          {liveNow ? (
+            <ThemedText type="smallBold" style={{ color: theme.danger }}>
+              ● Live now
+            </ThemedText>
+          ) : null}
+          <ThemedText type="small" themeColor="textSecondary">
+            {nextEvent
+              ? `Next event: ${formatEventDate(nextEvent.event_date)} — ${nextEvent.client_name}`
+              : 'No upcoming events scheduled'}
           </ThemedText>
         </View>
       </Card>
@@ -147,9 +208,23 @@ const styles = StyleSheet.create({
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   brandText: { flex: 1, gap: 2 },
   brandName: { fontSize: 22, fontWeight: '800' },
-  todayRow: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.two, marginTop: Spacing.one },
-  bigNumber: { fontSize: 44, fontWeight: '700', lineHeight: 48 },
-  todayLabel: { flex: 1 },
+  todayHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.two },
+  todayEmpty: { marginTop: Spacing.two },
+  todayEventRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+    marginTop: Spacing.two,
+  },
+  todayEventText: { flex: 1, gap: 2 },
+  todayEventName: { fontSize: 16, fontWeight: '600' },
+  nextLine: {
+    marginTop: Spacing.three,
+    paddingTop: Spacing.two,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: Spacing.half,
+  },
   statGrid: { flexDirection: 'row', gap: Spacing.two },
   statCard: { flex: 1, alignItems: 'center', gap: Spacing.half },
   statValue: { fontSize: 30, fontWeight: '700' },

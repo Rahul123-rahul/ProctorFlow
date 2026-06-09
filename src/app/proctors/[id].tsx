@@ -16,7 +16,7 @@ import {
 } from '@/db/proctors';
 import type { Proctor, ProctorEventView, ProctorPaymentView } from '@/db/types';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { eventDisplayName, formatDate, formatINR, formatTime12 } from '@/utils/format';
+import { eventDisplayName, formatDate, formatEventDate, formatINR, formatTime12 } from '@/utils/format';
 
 export default function ProctorDetailScreen() {
   const router = useRouter();
@@ -101,7 +101,7 @@ export default function ProctorDetailScreen() {
               <View style={styles.histText}>
                 <ThemedText style={styles.histTitle}>{d.client_name}</ThemedText>
                 <ThemedText themeColor="textSecondary" type="small">
-                  {formatDate(d.event_date)}
+                  {formatEventDate(d.event_date)}
                   {d.login_time ? ` · ${formatTime12(d.login_time)}` : ''}
                 </ThemedText>
                 {d.replaced_proctor_name ? (
@@ -128,7 +128,7 @@ export default function ProctorDetailScreen() {
                   {eventDisplayName(p.event_name, p.event_date, p.client_name)}
                 </ThemedText>
                 <ThemedText themeColor="textSecondary" type="small">
-                  {formatDate(p.event_date)} · {formatINR(p.amount)}
+                  {formatEventDate(p.event_date)} · {formatINR(p.amount)}
                   {p.paid_date ? ` · paid ${formatDate(p.paid_date)}` : ''}
                 </ThemedText>
               </View>

@@ -35,6 +35,20 @@ export async function listEvents(filter: EventFilter = {}): Promise<EventListIte
   );
 }
 
+/** Events on or after `date`, soonest first — for the dashboard + schedule view. */
+export async function listEventsFromDate(date: string): Promise<EventListItem[]> {
+  const db = await getDb();
+  return db.getAllAsync<EventListItem>(
+    `SELECT e.*, c.name AS client_name, c.logo_url AS client_logo_url,
+            (SELECT COUNT(*) FROM event_proctors ep WHERE ep.event_id = e.id) AS proctor_count
+     FROM events e
+     JOIN clients c ON c.id = e.client_id
+     WHERE e.event_date >= ?
+     ORDER BY e.event_date ASC, e.id ASC`,
+    date
+  );
+}
+
 export async function getEventProctors(eventId: number): Promise<EventProctorView[]> {
   const db = await getDb();
   return db.getAllAsync<EventProctorView>(

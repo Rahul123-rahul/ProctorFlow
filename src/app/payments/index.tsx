@@ -28,6 +28,7 @@ import {
   currentPeriod,
   eventDisplayName,
   formatDate,
+  formatEventDate,
   formatINR,
   formatMonth,
   todayISO,
@@ -255,7 +256,7 @@ function EventPaymentCard({
         <View style={styles.eventText}>
           <ThemedText style={styles.eventName}>{title}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            {g.client_name} · {formatDate(g.event_date)}
+            {g.client_name} · {formatEventDate(g.event_date)}
           </ThemedText>
         </View>
         <EventPaymentStatusPill status={g.payment_status} />

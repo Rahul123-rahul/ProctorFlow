@@ -20,7 +20,14 @@ import {
 } from '@/db/statement';
 import type { AdditionalPayment, ClientStatementGroup } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
-import { currentPeriod, formatDate, formatINR, formatMonth, todayISO } from '@/utils/format';
+import {
+  currentPeriod,
+  formatDate,
+  formatEventDate,
+  formatINR,
+  formatMonth,
+  todayISO,
+} from '@/utils/format';
 
 function buildStatementText(
   period: string,
@@ -37,7 +44,7 @@ function buildStatementText(
   for (const g of groups) {
     out.push(`*${g.client_name.toUpperCase()}*`);
     for (const ev of g.events) {
-      out.push(`${formatDate(ev.event_date)} — ${ev.proctor_count} proctors`);
+      out.push(`${formatEventDate(ev.event_date)} — ${ev.proctor_count} proctors`);
     }
     out.push('');
   }
@@ -181,7 +188,7 @@ export default function StatementScreen() {
                   {g.events.map((ev) => (
                     <View key={ev.event_id} style={styles.line}>
                       <ThemedText type="small" style={styles.lineLeft}>
-                        {formatDate(ev.event_date)}
+                        {formatEventDate(ev.event_date)}
                       </ThemedText>
                       <ThemedText type="small" themeColor="textSecondary">
                         {ev.proctor_count} proctors
